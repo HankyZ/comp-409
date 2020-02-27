@@ -5,9 +5,11 @@ import java.util.Random;
 class Point {
     private double x;
     private double y;
-    private List<Point> adjacentPointList;
+    List<Point> adjacentPointList;
     private boolean lock;
     private long id;
+
+    boolean occupied;
 
     Point(double x, double y) {
         this.x = x;
@@ -15,6 +17,7 @@ class Point {
         this.adjacentPointList = new ArrayList<>();
         this.lock = false;
         this.id = -1;
+        this.occupied = false;
     }
 
     static boolean checkDuplicate(double x, double y, List<Point> list) {
@@ -26,7 +29,6 @@ class Point {
             return false;
         this.lock = true;
         this.id = id;
-//        System.out.println(id + " got the lock");
         return true;
     }
 
@@ -58,19 +60,14 @@ class TriangulateThread extends Thread {
 
     @Override
     public void run() {
-
-
-//        System.out.println(this.getId() + "'k: " + this.k);
-        while (this.k > 0) {
+        while (this.k > 0 && !q1a.over) {
             int index1 = rand.nextInt(pointList.size());
             int index2 = rand.nextInt(pointList.size());
             while (index2 == index1) {
                 index2 = rand.nextInt(pointList.size());
             }
             addAnEdge(pointList.get(index1), pointList.get(index2));
-//            System.out.println(this.getId() + "'k: " + this.k);
         }
-
     }
 
     private void addAnEdge(Point a, Point b) {
@@ -80,19 +77,16 @@ class TriangulateThread extends Thread {
             b.releaseLock(id);
         }
 
-//        System.out.println(id + " locked");
         List<Point> list1 = a.getAdjacentPointList(id);
         List<Point> list2 = b.getAdjacentPointList(id);
 
         if (list1.contains(b)) {
             this.k--;
-            if (this.k == 0) {
-                System.out.println(this.getId() + ": " + q1a.numEdges);
-                System.exit(0);
-            }
+            if (this.k == 0)
+                q1a.over = true;
+
             a.releaseLock(id);
             b.releaseLock(id);
-//            System.out.println(id + " released the lock");
             return;
         }
 
@@ -100,17 +94,16 @@ class TriangulateThread extends Thread {
         list2.add(a);
         a.releaseLock(id);
         b.releaseLock(id);
-
-//        System.out.println(id + " released the lock");
         q1a.incrementNumEdges();
     }
 }
 
 class q1a {
 
-    volatile static int numEdges = 0;
+    private volatile static int numEdges = 0;
+    static boolean over = false;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
 
         if (args.length <= 0) {
             System.out.println("Wrong number of args");
@@ -120,6 +113,13 @@ class q1a {
         int n = Integer.parseInt(args[0]);
         int t = Integer.parseInt(args[1]);
         int k = Integer.parseInt(args[2]);
+
+        formWeb(n, t, k);
+
+        System.out.println(numEdges);
+    }
+
+    static List<Point> formWeb(int n, int t, int k) throws InterruptedException {
 
         List<Point> pointList = new ArrayList<>();
 
@@ -137,11 +137,19 @@ class q1a {
             pointList.add(new Point(x, y));
         }
 
+        List<Thread> threadList = new ArrayList<>();
+
         for (int i = 0; i < t; i++) {
             Thread thread = new TriangulateThread(pointList, k);
+            threadList.add(thread);
             thread.start();
         }
 
+        for (Thread thread : threadList) {
+            thread.join();
+        }
+
+        return pointList;
     }
 
     synchronized static void incrementNumEdges() {
